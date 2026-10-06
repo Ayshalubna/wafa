@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test-evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Train and evaluate from scratch (fails if a quality gate fails)
+        run: python -m scripts.build
+      - name: Tests (incl. JavaScript scorer vs XGBoost)
+        run: pytest -q
+      - name: Committed results are reproducible
+        run: git diff --stat --exit-code -- eval/RESULTS.md || echo "::warning::RESULTS.md differs from a fresh run"
+      - name: Build the static site
+        run: python -m scripts.build_static
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: |
+            eval/RESULTS.md
+            artifacts/metrics.json
